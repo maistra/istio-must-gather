@@ -71,15 +71,7 @@ function getCRDs() {
   echo ${result}
 }
 
-function callParentGather() {
-  echo "Executing main gather script"
-  echo
-  /usr/bin/gather
-}
-
 function main() {
-  callParentGather
-
   echo
   echo "Executing Istio gather script"
   echo
