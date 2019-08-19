@@ -5,7 +5,7 @@ Istio must-gather
 
 ### Usage
 ```sh
-oc adm must-gather --image=quay.io/maistra/istio-must-gather
+oc adm must-gather --image=docker.io/maistra/istio-must-gather:0.12.0
 ```
 
 The command above will create a local directory with a dump of the OpenShift Service Mesh state. Note that this command will only get data related to the Service Mesh part of the OpenShift cluster.
