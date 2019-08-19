@@ -68,6 +68,12 @@ function getCRDs() {
     result+=" ${crd} "
   done
 
+  # Get the remaining CRD's that don't contain a maistra label. See https://issues.jboss.org/browse/MAISTRA-799
+  local output=$(oc get crd -l'!maistra-version' -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E 'maistra|istio')
+  for crd in ${output}; do
+    result+=" ${crd} "
+  done
+
   echo ${result}
 }
 
