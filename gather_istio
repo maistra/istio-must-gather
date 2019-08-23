@@ -132,7 +132,9 @@ function main() {
   echo "Executing Istio gather script"
   echo
 
-  local resources="ns/istio-operator MutatingWebhookConfiguration ValidatingWebhookConfiguration"
+  operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
+  local resources="ns/${operatorNamespace} MutatingWebhookConfiguration ValidatingWebhookConfiguration"
+
 
   local controlPlanes="$(getControlPlanes)"
   resources+="$(addResourcePrefix ns ${controlPlanes})"
