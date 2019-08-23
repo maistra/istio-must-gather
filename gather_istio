@@ -15,6 +15,7 @@
 # limitations under the License.
 
 MUST_GATHER=${MUST_GATHER:-/usr/bin/openshift-must-gather}
+BASE_COLLECTION_PATH="/must-gather"
 
 # Auxiliary function that adds a k8s prefix to a resource
 # $1: The prefix - e.g. "ns" or "pod"
@@ -68,7 +69,62 @@ function getCRDs() {
     result+=" ${crd} "
   done
 
+  # Get the remaining CRD's that don't contain a maistra label. See https://issues.jboss.org/browse/MAISTRA-799
+  local output=$(oc get crd -l'!maistra-version' -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E 'maistra|istio')
+  for crd in ${output}; do
+    result+=" ${crd} "
+  done
+
   echo ${result}
+}
+
+# getSynchronization dumps the synchronization status for the specified control plane
+# to a file in the control plane directory of the control plane namespace
+# Arguments:
+#		namespace of the control plane
+#	Returns:
+#		nothing
+function getSynchronization() {
+  local namespace="${1}"
+
+  echo "Collecting resources for namespace ${cp}"
+  local pilotName=$(oc get pods -n ${namespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}")
+
+  echo "Overall Envoy synchronization status for namespace ${namespace}" 2>&1 1>${logPath}/controlPlaneStatus
+  local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
+  mkdir -p ${logPath}
+  oc exec ${pilotName} -n ${namespace} -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz 2>&1 1>${logPath}/synchronization
+}
+
+# getEnvoyConfigForPodsInNamespace dumps the envoy config for the specified namespace and
+# control plane to a file in the must-gather directory for each pod
+# Arguments:
+#   namespace of the control plane
+#   namespace to dump
+# Returns:
+#   nothing
+function getEnvoyConfigForPodsInNamespace() {
+  local controlPlaneNamespace="${1}"
+  local pilotName=$(oc get pods -n ${controlPlaneNamespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}")
+  local podNamespace="${2}"
+
+  echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
+
+  local pods="$(oc get pods -n ${podNamespace} -o jsonpath='{ .items[*].metadata.name }')"
+  for podName in ${pods}; do
+    if oc get pod -o yaml ${podName} -n ${podNamespace} | grep -q proxyv2; then
+      echo "Collecting config for pod ${podName}.${podNamespace}"
+
+      local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
+      mkdir -p ${logPath}
+
+      echo "Pilot config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" 2>&1 1>${logPath}/pilotConfiguration
+      oc exec ${pilotName} -n ${controlPlaneNamespace} -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" 2>&1 1>${logPath}/pilotConfiguration
+
+      echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" 2>&1 1>${logPath}/envoyConfiguration
+      oc exec -n ${podNamespace} ${podName} -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump 2>&1 1>${logPath}/envoyConfiguration
+    fi
+  done
 }
 
 function main() {
@@ -84,7 +140,16 @@ function main() {
   resources+="$(addResourcePrefix ns ${controlPlanes})"
 
   for cp in ${controlPlanes}; do
-    resources+="$(addResourcePrefix ns $(getMembers ${cp}))"
+    local members=$(getMembers ${cp})
+      resources+="$(addResourcePrefix ns ${members})"
+      getSynchronization ${cp}
+
+       #collect Envoy configuration first from control plane pods and then from members
+       getEnvoyConfigForPodsInNamespace ${cp} ${cp}
+       for member in ${members}; do
+          echo "Processing ${cp} member ${member}"
+          getEnvoyConfigForPodsInNamespace ${cp} ${member}
+       done
   done
 
   local crds="$(getCRDs)"
