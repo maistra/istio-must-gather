@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-MUST_GATHER=${MUST_GATHER:-/usr/bin/openshift-must-gather}
 BASE_COLLECTION_PATH="/must-gather"
 
 # The following CRDs are not managed by the Maistra operator but it
@@ -57,11 +56,15 @@ function getMembers() {
   local cp="${1}"
 
   local output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{..members}' 2>/dev/null)"
+
   if [ -z "${output}" ]; then
     return
   fi
 
   output="$(echo ${output} | tr '[]' '  ')"
+
+  # The oc get command above returns namespaces surrounded by quotes. Trim any quotes.
+  output=$(echo ${output} | sed -e 's/"//g')
   echo ${output}
 }
 
@@ -92,7 +95,7 @@ function getSynchronization() {
   local namespace="${1}"
 
   echo "Collecting resources for namespace ${cp}"
-  local pilotName=$(oc get pods -n ${namespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}")
+  local pilotName=$(oc get pods -n ${namespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}")
 
   echo "Overall Envoy synchronization status for namespace ${namespace}" 2>&1 1>${logPath}/controlPlaneStatus
   local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
@@ -109,20 +112,24 @@ function getSynchronization() {
 #   nothing
 function getEnvoyConfigForPodsInNamespace() {
   local controlPlaneNamespace="${1}"
-  local pilotName=$(oc get pods -n ${controlPlaneNamespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}")
+  local pilotName=$(oc get pods -n ${controlPlaneNamespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}")
   local podNamespace="${2}"
 
   echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
 
   local pods="$(oc get pods -n ${podNamespace} -o jsonpath='{ .items[*].metadata.name }')"
   for podName in ${pods}; do
+    if [ -z $podName ]; then
+        continue
+    fi
+
     if oc get pod -o yaml ${podName} -n ${podNamespace} | grep -q proxyv2; then
       echo "Collecting config for pod ${podName}.${podNamespace}"
 
       local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
       mkdir -p ${logPath}
 
-      echo "Pilot config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" 2>&1 1>${logPath}/pilotConfiguration
+      echo "Pilot config for pod ${podName}.${podNamespace} from istiod ${pilotName}.${controlPlaneNamespace}" 2>&1 1>${logPath}/pilotConfiguration
       oc exec ${pilotName} -n ${controlPlaneNamespace} -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" 2>&1 1>${logPath}/pilotConfiguration
 
       echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" 2>&1 1>${logPath}/envoyConfiguration
@@ -144,16 +151,20 @@ function main() {
   resources+="$(addResourcePrefix ns ${controlPlanes})"
 
   for cp in ${controlPlanes}; do
-    local members=$(getMembers ${cp})
+      local members=$(getMembers ${cp})
       resources+="$(addResourcePrefix ns ${members})"
       getSynchronization ${cp}
+
       for cr in ${DEPENDENCY_CRS}; do
-        ${MUST_GATHER} inspect -n ${cp} ${cr}
+        oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n ${cp} ${cr}
       done
 
        #collect Envoy configuration first from control plane pods and then from members
        getEnvoyConfigForPodsInNamespace ${cp} ${cp}
        for member in ${members}; do
+           if [ -z $member ]; then
+               continue
+           fi
           echo "Processing ${cp} member ${member}"
           getEnvoyConfigForPodsInNamespace ${cp} ${member}
        done
@@ -165,14 +176,14 @@ function main() {
   for resource in ${resources}; do
     echo
     echo "Dumping resource ${resource}..."
-    ${MUST_GATHER} inspect ${resource}
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" ${resource}
   done
 
   # Get all CRD's
   for crd in ${crds}; do
     echo
     echo "Dumping CRD ${crd}..."
-    ${MUST_GATHER} inspect --all-namespaces ${crd}
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" --all-namespaces ${crd}
   done
 
   echo
