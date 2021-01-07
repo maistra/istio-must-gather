@@ -89,12 +89,7 @@ function getCRDs() {
 function getPilotName() {
   local namespace="${1}"
 
-  #this will pipe stderr to stdout. In the case where istiod fails and pilot succeeds, the correct one will be picked up. In the case where both return an error, then the error is returned
-  pilotName=$(oc get pods -n ${namespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}" 2>&1)
-  if [ $? == 1 ]; then
-    pilotName=$(oc get pods -n ${namespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}" 2>&1)
-  fi
-  echo ${pilotName}
+  oc get pods -n ${namespace} -l 'app in (istiod,pilot)'  -o jsonpath="{.items[0].metadata.name}"
 }
 
 # getSynchronization dumps the synchronization status for the specified control plane
