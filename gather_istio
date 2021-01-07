@@ -85,6 +85,18 @@ function getCRDs() {
   echo ${result}
 }
 
+# getPilotName gets the name of the Pilot instance in that namespace. 
+function getPilotName() {
+  local namespace="${1}"
+
+  #this will pipe stderr to stdout. In the case where istiod fails and pilot succeeds, the correct one will be picked up. In the case where both return an error, then the error is returned
+  pilotName=$(oc get pods -n ${namespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}" 2>&1)
+  if [ $? == 1 ]; then
+    pilotName=$(oc get pods -n ${namespace} -lapp=pilot  -o jsonpath="{.items[0].metadata.name}" 2>&1)
+  fi
+  echo ${pilotName}
+}
+
 # getSynchronization dumps the synchronization status for the specified control plane
 # to a file in the control plane directory of the control plane namespace
 # Arguments:
@@ -95,7 +107,7 @@ function getSynchronization() {
   local namespace="${1}"
 
   echo "Collecting resources for namespace ${cp}"
-  local pilotName=$(oc get pods -n ${namespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}")
+  local pilotName=$(getPilotName ${namespace})
 
   echo "Overall Envoy synchronization status for namespace ${namespace}" 2>&1 1>${logPath}/controlPlaneStatus
   local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
@@ -112,7 +124,7 @@ function getSynchronization() {
 #   nothing
 function getEnvoyConfigForPodsInNamespace() {
   local controlPlaneNamespace="${1}"
-  local pilotName=$(oc get pods -n ${controlPlaneNamespace} -lapp=istiod  -o jsonpath="{.items[0].metadata.name}")
+  local pilotName=$(getPilotName ${controlPlaneNamespace})
   local podNamespace="${2}"
 
   echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
