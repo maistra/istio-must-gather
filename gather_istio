@@ -52,6 +52,7 @@ function getControlPlanes() {
 
 # Get the members of a mesh (namespaces that belongs to a certain control plane).
 # $1 = Namespace of the control plane - e.g. "istio-system"
+# Returns a space-separated list of member namespaces (e.g. "bookinfo bookinfo2")
 function getMembers() {
   local cp="${1}"
 
@@ -61,10 +62,9 @@ function getMembers() {
     return
   fi
 
-  output="$(echo ${output} | tr '[]' '  ')"
-
-  # The oc get command above returns namespaces surrounded by quotes. Trim any quotes.
-  output=$(echo ${output} | sed -e 's/"//g')
+  # Convert the form '["bookinfo","bookinfo2"]' to 'bookinfo bookinfo2'
+  output=${output//[\"\[\]]}   # remove [, ], and "
+  output=${output//,/ }        # replace ',' with ' '
   echo ${output}
 }
 
