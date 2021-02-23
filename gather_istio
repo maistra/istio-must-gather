@@ -52,19 +52,16 @@ function getControlPlanes() {
 
 # Get the members of a mesh (namespaces that belongs to a certain control plane).
 # $1 = Namespace of the control plane - e.g. "istio-system"
+# Returns a space-separated list of member namespaces (e.g. "bookinfo bookinfo2")
 function getMembers() {
   local cp="${1}"
 
-  local output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{..members}' 2>/dev/null)"
+  local output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{.spec.members[*]}' 2>/dev/null)"
 
   if [ -z "${output}" ]; then
     return
   fi
 
-  output="$(echo ${output} | tr '[]' '  ')"
-
-  # The oc get command above returns namespaces surrounded by quotes. Trim any quotes.
-  output=$(echo ${output} | sed -e 's/"//g')
   echo ${output}
 }
 
