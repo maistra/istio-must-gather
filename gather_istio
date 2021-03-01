@@ -42,7 +42,8 @@ function addResourcePrefix() {
 function getControlPlanes() {
   local result=()
 
-  local namespaces=$(oc get ServiceMeshControlPlane --all-namespaces -o jsonpath='{.items[*].metadata.namespace}')
+  local namespaces
+  namespaces=$(oc get ServiceMeshControlPlane --all-namespaces -o jsonpath='{.items[*].metadata.namespace}')
   for namespace in ${namespaces}; do
     result+=("${namespace}")
   done
@@ -56,7 +57,8 @@ function getControlPlanes() {
 function getMembers() {
   local cp="${1}"
 
-  local output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{.spec.members[*]}' 2>/dev/null)"
+  local output
+  output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{.spec.members[*]}' 2>/dev/null)"
 
   if [ -z "${output}" ]; then
     return
@@ -68,13 +70,15 @@ function getMembers() {
 # Get the CRD's that belong to Maistra
 function getCRDs() {
   local result=()
-  local output=$(oc get crd -lmaistra-version -o jsonpath='{.items[*].metadata.name}')
+  local output
+  output=$(oc get crd -lmaistra-version -o jsonpath='{.items[*].metadata.name}')
   for crd in ${output}; do
     result+=("${crd}")
   done
 
   # Get the remaining CRD's that don't contain a maistra label. See https://issues.jboss.org/browse/MAISTRA-799
-  local output=$(oc get crd -l'!maistra-version' -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E 'maistra|istio')
+  local output
+  output=$(oc get crd -l'!maistra-version' -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E 'maistra|istio')
   for crd in ${output}; do
     result+=("${crd}")
   done
@@ -99,7 +103,8 @@ function getSynchronization() {
   local namespace="${1}"
 
   echo "Collecting resources for namespace ${cp}"
-  local pilotName=$(getPilotName ${namespace})
+  local pilotName
+  pilotName=$(getPilotName ${namespace})
 
   echo "Overall Envoy synchronization status for namespace ${namespace}" 2>&1 1>${logPath}/controlPlaneStatus
   local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
@@ -116,12 +121,14 @@ function getSynchronization() {
 #   nothing
 function getEnvoyConfigForPodsInNamespace() {
   local controlPlaneNamespace="${1}"
-  local pilotName=$(getPilotName ${controlPlaneNamespace})
+  local pilotName
+  pilotName=$(getPilotName ${controlPlaneNamespace})
   local podNamespace="${2}"
 
   echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
 
-  local pods="$(oc get pods -n ${podNamespace} -o jsonpath='{ .items[*].metadata.name }')"
+  local pods
+  pods="$(oc get pods -n ${podNamespace} -o jsonpath='{ .items[*].metadata.name }')"
   for podName in ${pods}; do
     if [ -z $podName ]; then
         continue
@@ -151,11 +158,13 @@ function main() {
   local resources="ns/${operatorNamespace} MutatingWebhookConfiguration ValidatingWebhookConfiguration"
 
 
-  local controlPlanes="$(getControlPlanes)"
+  local controlPlanes
+  controlPlanes="$(getControlPlanes)"
   resources+="$(addResourcePrefix ns ${controlPlanes})"
 
   for cp in ${controlPlanes}; do
-      local members=$(getMembers ${cp})
+      local members
+      members=$(getMembers ${cp})
       resources+="$(addResourcePrefix ns ${members})"
       getSynchronization ${cp}
 
@@ -174,7 +183,8 @@ function main() {
        done
   done
 
-  local crds="$(getCRDs)"
+  local crds
+  crds="$(getCRDs)"
   resources+="$(addResourcePrefix crd ${crds})"
 
   for resource in ${resources}; do
