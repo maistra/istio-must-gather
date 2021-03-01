@@ -31,7 +31,7 @@ function addResourcePrefix() {
   local prefix="${1}"
   shift
 
-  for ns in $*; do
+  for ns in "$@"; do
     result+=" ${prefix}/${ns} "
   done
 
