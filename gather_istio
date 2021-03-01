@@ -44,10 +44,10 @@ function getControlPlanes() {
 
   local namespaces=$(oc get ServiceMeshControlPlane --all-namespaces -o jsonpath='{.items[*].metadata.namespace}')
   for namespace in ${namespaces}; do
-    result+=" ${namespace} "
+    result+=("${namespace}")
   done
 
-  echo "${result}"
+  echo "${result[@]}"
 }
 
 # Get the members of a mesh (namespaces that belongs to a certain control plane).
@@ -67,19 +67,19 @@ function getMembers() {
 
 # Get the CRD's that belong to Maistra
 function getCRDs() {
-  local result=""
+  local result=()
   local output=$(oc get crd -lmaistra-version -o jsonpath='{.items[*].metadata.name}')
   for crd in ${output}; do
-    result+=" ${crd} "
+    result+=("${crd}")
   done
 
   # Get the remaining CRD's that don't contain a maistra label. See https://issues.jboss.org/browse/MAISTRA-799
   local output=$(oc get crd -l'!maistra-version' -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep -E 'maistra|istio')
   for crd in ${output}; do
-    result+=" ${crd} "
+    result+=("${crd}")
   done
 
-  echo ${result}
+  echo "${result[@]}"
 }
 
 # getPilotName gets the name of the Pilot instance in that namespace. 
