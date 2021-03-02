@@ -64,7 +64,7 @@ function getMembers() {
     return
   fi
 
-  echo ${output}
+  echo "${output}"
 }
 
 # Get the CRD's that belong to Maistra
@@ -90,7 +90,7 @@ function getCRDs() {
 function getPilotName() {
   local namespace="${1}"
 
-  oc get pods -n ${namespace} -l 'app in (istiod,pilot)'  -o jsonpath="{.items[0].metadata.name}"
+  oc get pods -n "${namespace}" -l 'app in (istiod,pilot)'  -o jsonpath="{.items[0].metadata.name}"
 }
 
 # getSynchronization dumps the synchronization status for the specified control plane
@@ -104,12 +104,12 @@ function getSynchronization() {
 
   echo "Collecting resources for namespace ${cp}"
   local pilotName
-  pilotName=$(getPilotName ${namespace})
+  pilotName=$(getPilotName "${namespace}")
 
-  echo "Overall Envoy synchronization status for namespace ${namespace}" > ${logPath}/controlPlaneStatus 2>&1
+  echo "Overall Envoy synchronization status for namespace ${namespace}" > "${logPath}/controlPlaneStatus" 2>&1
   local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
-  mkdir -p ${logPath}
-  oc exec ${pilotName} -n ${namespace} -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz > ${logPath}/synchronization 2>&1
+  mkdir -p "${logPath}"
+  oc exec "${pilotName}" -n "${namespace}" -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz > "${logPath}/synchronization" 2>&1
 }
 
 # getEnvoyConfigForPodsInNamespace dumps the envoy config for the specified namespace and
@@ -122,29 +122,29 @@ function getSynchronization() {
 function getEnvoyConfigForPodsInNamespace() {
   local controlPlaneNamespace="${1}"
   local pilotName
-  pilotName=$(getPilotName ${controlPlaneNamespace})
+  pilotName=$(getPilotName "${controlPlaneNamespace}")
   local podNamespace="${2}"
 
   echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
 
   local pods
-  pods="$(oc get pods -n ${podNamespace} -o jsonpath='{ .items[*].metadata.name }')"
+  pods="$(oc get pods -n "${podNamespace}" -o jsonpath='{ .items[*].metadata.name }')"
   for podName in ${pods}; do
-    if [ -z $podName ]; then
+    if [ -z "$podName" ]; then
         continue
     fi
 
-    if oc get pod -o yaml ${podName} -n ${podNamespace} | grep -q proxyv2; then
+    if oc get pod -o yaml "${podName}" -n "${podNamespace}" | grep -q proxyv2; then
       echo "Collecting config for pod ${podName}.${podNamespace}"
 
       local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
-      mkdir -p ${logPath}
+      mkdir -p "${logPath}"
 
-      echo "Pilot config for pod ${podName}.${podNamespace} from istiod ${pilotName}.${controlPlaneNamespace}" > ${logPath}/pilotConfiguration 2>&1
-      oc exec ${pilotName} -n ${controlPlaneNamespace} -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" > ${logPath}/pilotConfiguration 2>&1
+      echo "Pilot config for pod ${podName}.${podNamespace} from istiod ${pilotName}.${controlPlaneNamespace}" > "${logPath}/pilotConfiguration" 2>&1
+      oc exec "${pilotName}" -n "${controlPlaneNamespace}" -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" > "${logPath}/pilotConfiguration" 2>&1
 
-      echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > ${logPath}/envoyConfiguration 2>&1
-      oc exec -n ${podNamespace} ${podName} -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > ${logPath}/envoyConfiguration 2>&1
+      echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > "${logPath}/envoyConfiguration" 2>&1
+      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > "${logPath}/envoyConfiguration" 2>&1
     fi
   done
 }
@@ -160,44 +160,44 @@ function main() {
 
   local controlPlanes
   controlPlanes="$(getControlPlanes)"
-  resources+="$(addResourcePrefix ns ${controlPlanes})"
+  resources+="$(addResourcePrefix ns "${controlPlanes}")"
 
   for cp in ${controlPlanes}; do
       local members
-      members=$(getMembers ${cp})
-      resources+="$(addResourcePrefix ns ${members})"
-      getSynchronization ${cp}
+      members=$(getMembers "${cp}")
+      resources+="$(addResourcePrefix ns "${members}")"
+      getSynchronization "${cp}"
 
       for cr in ${DEPENDENCY_CRS}; do
-        oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n ${cp} ${cr}
+        oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n "${cp}" "${cr}"
       done
 
        #collect Envoy configuration first from control plane pods and then from members
-       getEnvoyConfigForPodsInNamespace ${cp} ${cp}
+       getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
        for member in ${members}; do
-           if [ -z $member ]; then
+           if [ -z "$member" ]; then
                continue
            fi
           echo "Processing ${cp} member ${member}"
-          getEnvoyConfigForPodsInNamespace ${cp} ${member}
+          getEnvoyConfigForPodsInNamespace "${cp}" "${member}"
        done
   done
 
   local crds
   crds="$(getCRDs)"
-  resources+="$(addResourcePrefix crd ${crds})"
+  resources+="$(addResourcePrefix crd "${crds}")"
 
   for resource in ${resources}; do
     echo
     echo "Dumping resource ${resource}..."
-    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" ${resource}
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
   done
 
   # Get all CRD's
   for crd in ${crds}; do
     echo
     echo "Dumping CRD ${crd}..."
-    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" --all-namespaces ${crd}
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" --all-namespaces "${crd}"
   done
 
   echo
