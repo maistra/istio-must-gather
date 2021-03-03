@@ -4,6 +4,6 @@ FROM quay.io/openshift/origin-must-gather:4.6
 RUN mv /usr/bin/gather /usr/bin/gather_original
 
 # Use our gather script in place of the original one
-COPY gather_istio /usr/bin/gather
+COPY gather_istio.sh /usr/bin/gather
 
 ENTRYPOINT /usr/bin/gather

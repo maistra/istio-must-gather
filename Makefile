@@ -17,6 +17,9 @@ default: image
 HUB ?= quay.io/maistra
 TAG ?= latest
 
+lint:
+	find . -name '*.sh' -print0 | xargs -0 -r shellcheck
+
 image:
 	podman build -t ${HUB}/istio-must-gather:${TAG} .
 
