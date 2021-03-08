@@ -157,9 +157,11 @@ function main() {
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
   local resources="ns/${operatorNamespace} MutatingWebhookConfiguration ValidatingWebhookConfiguration"
 
+  local controlPlanes="$*"
+  if [ -z "${controlPlanes}" ]; then
+    controlPlanes="$(getControlPlanes)"
+  fi
 
-  local controlPlanes
-  controlPlanes="$(getControlPlanes)"
   resources+="$(addResourcePrefix ns "${controlPlanes}")"
 
   for cp in ${controlPlanes}; do
@@ -206,4 +208,4 @@ function main() {
   echo
 }
 
-main
+main "$@"
