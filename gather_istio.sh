@@ -149,10 +149,22 @@ function getEnvoyConfigForPodsInNamespace() {
   done
 }
 
+function version() {
+  if [[ -n $OSSM_MUST_GATHER_VERSION ]] ; then
+    echo "${OSSM_MUST_GATHER_VERSION}"
+  else
+    echo "0.0.0-unknown"
+  fi
+}
+
 function main() {
   echo
   echo "Executing Istio gather script"
   echo
+
+  versionFile="${BASE_COLLECTION_PATH}/version"
+  echo "openshift-service-mesh/must-gather"> "$versionFile"
+  version >> "$versionFile"
 
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
   local resources="ns/${operatorNamespace} MutatingWebhookConfiguration ValidatingWebhookConfiguration"
