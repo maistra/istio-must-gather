@@ -164,6 +164,8 @@ function main() {
 
   resources+="$(addResourcePrefix ns "${controlPlanes}")"
 
+  oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n "${operatorNamespace}" clusterserviceversion
+
   for cp in ${controlPlanes}; do
       local members
       members=$(getMembers "${cp}")
