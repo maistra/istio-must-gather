@@ -168,7 +168,12 @@ function main() {
   resources+="$(addResourcePrefix ns "${controlPlanes}")"
 
   for cp in ${controlPlanes}; do
-      echo "Processing control plane ${cp}"
+      if [[ -z $(oc get smcp -n "${cp}" -oname) ]]; then
+        echo "ERROR: namespace ${cp} does not contain a ServiceMeshControlPlane object"
+        exit 1
+      fi
+
+      echo "Processing control plane namespace: ${cp}"
 
       local members
       members=$(getMembers "${cp}")
