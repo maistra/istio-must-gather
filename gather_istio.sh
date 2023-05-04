@@ -58,7 +58,7 @@ function getMembers() {
   local cp="${1}"
 
   local output
-  output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{.spec.members[*]}' 2>/dev/null)"
+  output="$(oc -n "${cp}" get ServiceMeshMemberRoll default -o jsonpath='{.status.members[*]}' 2>/dev/null)"
 
   if [ -z "${output}" ]; then
     return
