@@ -160,7 +160,23 @@ function version() {
   fi
 }
 
+function inspect() {
+  local resource ns
+  resource=$1
+  ns=$2
+
+  echo
+  if [ -n "$ns" ]; then
+    echo "Inspecting resource ${resource} in namespace ${ns}..."
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
+  else
+    echo "Inspecting resource ${resource}..."
+    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
+  fi
+}
+
 function main() {
+  local crds controlPlanes members
   echo
   echo "Executing Istio gather script"
   echo
@@ -170,16 +186,22 @@ function main() {
   version >> "$versionFile"
 
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
-  local resources="ns/${operatorNamespace} MutatingWebhookConfiguration ValidatingWebhookConfiguration"
 
-  local controlPlanes="$*"
+  inspect "ns/${operatorNamespace}"
+  inspect MutatingWebhookConfiguration
+  inspect ValidatingWebhookConfiguration
+
+  crds="$(getCRDs)"
+  for crd in ${crds}; do
+    inspect "crd/${crd}"
+  done
+
+  controlPlanes="$*"
   if [ -z "${controlPlanes}" ]; then
     controlPlanes="$(getControlPlanes)"
   fi
 
-  resources+="$(addResourcePrefix ns "${controlPlanes}")"
-
-  oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n "${operatorNamespace}" clusterserviceversion
+  inspect clusterserviceversion "${operatorNamespace}"
 
   for cp in ${controlPlanes}; do
       if [[ -z $(oc get smcp -n "${cp}" -oname) ]]; then
@@ -189,41 +211,32 @@ function main() {
 
       echo "Processing control plane namespace: ${cp}"
 
-      local members
-      members=$(getMembers "${cp}")
-      resources+="$(addResourcePrefix ns "${members}")"
+      inspect "ns/${cp}"
+      for crd in ${crds}; do
+        inspect "${crd}" "${cp}"
+      done
+
+      getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
       getSynchronization "${cp}"
 
       for cr in ${DEPENDENCY_CRS}; do
-        oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" -n "${cp}" "${cr}"
+        inspect "${cr}" "${cp}"
       done
 
-       #collect Envoy configuration first from control plane pods and then from members
-       getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
-       for member in ${members}; do
-           if [ -z "$member" ]; then
-               continue
-           fi
+      members=$(getMembers "${cp}")
+      for member in ${members}; do
+          if [ -z "$member" ]; then
+              continue
+          fi
+
           echo "Processing ${cp} member ${member}"
+          inspect "ns/${member}"
+          for crd in ${crds}; do
+            inspect "${crd}" "${member}"
+          done
+
           getEnvoyConfigForPodsInNamespace "${cp}" "${member}"
        done
-  done
-
-  local crds
-  crds="$(getCRDs)"
-  resources+="$(addResourcePrefix crd "${crds}")"
-
-  for resource in ${resources}; do
-    echo
-    echo "Dumping resource ${resource}..."
-    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
-  done
-
-  # Get all CRD's
-  for crd in ${crds}; do
-    echo
-    echo "Dumping CRD ${crd}..."
-    oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" --all-namespaces "${crd}"
   done
 
   echo
