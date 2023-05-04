@@ -31,8 +31,8 @@ function addResourcePrefix() {
   local prefix="${1}"
   shift
 
-  for ns in "$@"; do
-    result+=" ${prefix}/${ns} "
+  for name in "$@"; do
+    result+=" ${prefix}/${name} "
   done
 
   echo "${result}"
@@ -145,6 +145,9 @@ function getEnvoyConfigForPodsInNamespace() {
 
       echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > "${logPath}/envoyConfiguration" 2>&1
       oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > "${logPath}/envoyConfiguration" 2>&1
+
+      echo "Envoy statistics for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > "${logPath}/envoyStatistics" 2>&1
+      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET stats > "${logPath}/envoyStatistics" 2>&1
     fi
   done
 }
@@ -165,6 +168,8 @@ function main() {
   resources+="$(addResourcePrefix ns "${controlPlanes}")"
 
   for cp in ${controlPlanes}; do
+      echo "Processing control plane ${cp}"
+
       local members
       members=$(getMembers "${cp}")
       resources+="$(addResourcePrefix ns "${members}")"
