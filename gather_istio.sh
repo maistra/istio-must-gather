@@ -108,6 +108,7 @@ function getEnvoyConfigForPodsInNamespace() {
   pilotName=$(getPilotName "${controlPlaneNamespace}")
   local podNamespace="${2}"
 
+  echo
   echo "Collecting Envoy config for pods in ${podNamespace}, control plane namespace ${controlPlaneNamespace}"
 
   local pods
@@ -145,16 +146,16 @@ function inspect() {
 
   echo
   if [ -n "$ns" ]; then
-    echo "Inspecting resource ${resource} in namespace ${ns}..."
+    echo "Inspecting resource ${resource} in namespace ${ns}"
     oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
   else
-    echo "Inspecting resource ${resource}..."
+    echo "Inspecting resource ${resource}"
     oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
   fi
 }
 
 function main() {
-  local crds controlPlanes members
+  local crds controlPlanes members smcpName
   echo
   echo "Executing Istio gather script"
   echo
@@ -166,8 +167,8 @@ function main() {
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
 
   inspect "ns/${operatorNamespace}"
-  inspect MutatingWebhookConfiguration
-  inspect ValidatingWebhookConfiguration
+  inspect "mutatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
+  inspect "validatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
 
   crds="$(getCRDs)"
   for crd in ${crds}; do
@@ -182,17 +183,22 @@ function main() {
   inspect clusterserviceversion "${operatorNamespace}"
 
   for cp in ${controlPlanes}; do
-      if [[ -z $(oc get smcp -n "${cp}" -oname) ]]; then
+      smcpName="$(oc get smcp -n "${cp}" -o jsonpath='{.items[*].metadata.name}')"
+      if [[ -z "$smcpName" ]]; then
         echo "ERROR: namespace ${cp} does not contain a ServiceMeshControlPlane object"
         exit 1
       fi
 
+      echo
       echo "Processing control plane namespace: ${cp}"
 
       inspect "ns/${cp}"
       for crd in ${crds}; do
         inspect "${crd}" "${cp}"
       done
+
+      inspect "mutatingwebhookconfiguration/istiod-${smcpName}-${cp}"
+      inspect "validatingwebhookconfiguration/istio-validator-${smcpName}-${cp}"
 
       getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
       getSynchronization "${cp}"
