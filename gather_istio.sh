@@ -154,6 +154,17 @@ function inspect() {
   fi
 }
 
+function inspectNamespace() {
+  local ns
+  ns=$1
+
+  inspect "ns/$ns"
+  for crd in $crds; do
+    inspect "$crd" "$ns"
+  done
+  inspect net-attach-def,roles,rolebindings "$ns"
+}
+
 function main() {
   local crds controlPlanes members smcpName
   echo
@@ -166,9 +177,13 @@ function main() {
 
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
 
-  inspect "ns/${operatorNamespace}"
   inspect "mutatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
   inspect "validatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
+  inspect nodes
+
+  for r in $(oc get clusterroles,clusterrolebindings -l maistra-version,maistra.io/owner= -oname); do
+    inspect "$r"
+  done
 
   crds="$(getCRDs)"
   for crd in ${crds}; do
@@ -180,6 +195,7 @@ function main() {
     controlPlanes="$(getControlPlanes)"
   fi
 
+  inspect "ns/$operatorNamespace"
   inspect clusterserviceversion "${operatorNamespace}"
 
   for cp in ${controlPlanes}; do
@@ -192,16 +208,15 @@ function main() {
       echo
       echo "Processing control plane namespace: ${cp}"
 
-      inspect "ns/${cp}"
-      for crd in ${crds}; do
-        inspect "${crd}" "${cp}"
-      done
-
+      crds="$crds" inspectNamespace "$cp"
       inspect "mutatingwebhookconfiguration/istiod-${smcpName}-${cp}"
       inspect "validatingwebhookconfiguration/istio-validator-${smcpName}-${cp}"
-
       getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
       getSynchronization "${cp}"
+
+      for r in $(oc get clusterroles,clusterrolebindings -l maistra.io/owner="$cp" -oname); do
+        inspect "$r"
+      done
 
       for cr in ${DEPENDENCY_CRS}; do
         inspect "${cr}" "${cp}"
@@ -214,11 +229,7 @@ function main() {
           fi
 
           echo "Processing ${cp} member ${member}"
-          inspect "ns/${member}"
-          for crd in ${crds}; do
-            inspect "${crd}" "${member}"
-          done
-
+          crds="$crds" inspectNamespace "$member"
           getEnvoyConfigForPodsInNamespace "${cp}" "${member}"
        done
   done
