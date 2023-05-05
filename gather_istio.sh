@@ -84,14 +84,15 @@ function getPilotName() {
 function getSynchronization() {
   local namespace="${1}"
 
-  echo "Collecting resources for namespace ${cp}"
   local pilotName
   pilotName=$(getPilotName "${namespace}")
 
-  echo "Overall Envoy synchronization status for namespace ${namespace}" > "${logPath}/controlPlaneStatus" 2>&1
-  local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/controlplane
+  echo
+  echo "Collecting /debug/syncz from ${pilotName} in namespace ${cp}"
+
+  local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}
   mkdir -p "${logPath}"
-  oc exec "${pilotName}" -n "${namespace}" -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz > "${logPath}/synchronization" 2>&1
+  oc exec "${pilotName}" -n "${namespace}" -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz > "${logPath}/debug-syncz.json" 2>&1
 }
 
 # getEnvoyConfigForPodsInNamespace dumps the envoy config for the specified namespace and
@@ -117,19 +118,14 @@ function getEnvoyConfigForPodsInNamespace() {
     fi
 
     if oc get pod -o yaml "${podName}" -n "${podNamespace}" | grep -q proxyv2; then
-      echo "Collecting config for pod ${podName}.${podNamespace}"
+      echo "Collecting config_dump and stats for pod ${podName}.${podNamespace}"
 
       local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
       mkdir -p "${logPath}"
 
-      echo "Pilot config for pod ${podName}.${podNamespace} from istiod ${pilotName}.${controlPlaneNamespace}" > "${logPath}/pilotConfiguration" 2>&1
-      oc exec "${pilotName}" -n "${controlPlaneNamespace}" -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" > "${logPath}/pilotConfiguration" 2>&1
-
-      echo "Envoy config for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > "${logPath}/envoyConfiguration" 2>&1
-      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > "${logPath}/envoyConfiguration" 2>&1
-
-      echo "Envoy statistics for pod ${podName}.${podNamespace} from pilot ${pilotName}.${controlPlaneNamespace}" > "${logPath}/envoyStatistics" 2>&1
-      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET stats > "${logPath}/envoyStatistics" 2>&1
+      oc exec "${pilotName}" -n "${controlPlaneNamespace}" -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" > "${logPath}/config_dump_istiod.json" 2>&1
+      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > "${logPath}/config_dump_proxy.json" 2>&1
+      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET stats > "${logPath}/proxy_stats" 2>&1
     fi
   done
 }
