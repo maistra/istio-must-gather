@@ -20,24 +20,6 @@ BASE_COLLECTION_PATH="/must-gather"
 # will create instances of them.
 DEPENDENCY_CRS="jaegers.jaegertracing.io kialis.kiali.io"
 
-# Auxiliary function that adds a k8s prefix to a resource
-# $1: The prefix - e.g. "ns" or "pod"
-# $2...$N: Resources
-# Returns: The list of resources with the prefix prepended on them
-#
-# Example: addResourcePrefix pod a b c  => Returns: pod/a pod/b pod/c
-function addResourcePrefix() {
-  local result=""
-  local prefix="${1}"
-  shift
-
-  for name in "$@"; do
-    result+=" ${prefix}/${name} "
-  done
-
-  echo "${result}"
-}
-
 # Get the namespaces of all control planes in the cluster
 function getControlPlanes() {
   local result=()
