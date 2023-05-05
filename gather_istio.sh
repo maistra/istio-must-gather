@@ -166,7 +166,7 @@ function inspectNamespace() {
 }
 
 function main() {
-  local controlPlanes members smcpName
+  local crds controlPlanes members smcpName
   echo
   echo "Executing Istio gather script"
   echo
@@ -185,7 +185,6 @@ function main() {
     inspect "$r"
   done
 
-  export crds
   crds="$(getCRDs)"
   for crd in ${crds}; do
     inspect "crd/${crd}"
@@ -209,7 +208,7 @@ function main() {
       echo
       echo "Processing control plane namespace: ${cp}"
 
-      inspectNamespace "$cp"
+      crds="$crds" inspectNamespace "$cp"
       inspect "mutatingwebhookconfiguration/istiod-${smcpName}-${cp}"
       inspect "validatingwebhookconfiguration/istio-validator-${smcpName}-${cp}"
       getEnvoyConfigForPodsInNamespace "${cp}" "${cp}"
@@ -230,7 +229,7 @@ function main() {
           fi
 
           echo "Processing ${cp} member ${member}"
-          inspectNamespace "$member"
+          crds="$crds" inspectNamespace "$member"
           getEnvoyConfigForPodsInNamespace "${cp}" "${member}"
        done
   done
