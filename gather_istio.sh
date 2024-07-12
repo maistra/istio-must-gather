@@ -177,8 +177,16 @@ function main() {
 
   operatorNamespace=$(oc get pods --all-namespaces -l name=istio-operator -o jsonpath="{.items[0].metadata.namespace}")
 
-  inspect "mutatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
-  inspect "validatingwebhookconfiguration/${operatorNamespace}.servicemesh-resources.maistra.io"
+  validatingwebhookconfigurations=$(oc get validatingwebhookconfiguration -o custom-columns=NAME:.metadata.name | grep maistra)
+  for validatingwebhookconfiguration in $validatingwebhookconfigurations; do
+    inspect "validatingwebhookconfiguration/$validatingwebhookconfiguration"
+  done
+
+  mutatingwebhookconfigurations=$(oc get mutatingwebhookconfiguration -o custom-columns=NAME:.metadata.name | grep maistra)
+  for mutatingwebhookconfiguration in $mutatingwebhookconfigurations; do
+    inspect "mutatingwebhookconfiguration/$mutatingwebhookconfiguration"
+  done
+
   inspect nodes
 
   for r in $(oc get clusterroles,clusterrolebindings -l maistra-version,maistra.io/owner= -oname); do
